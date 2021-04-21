@@ -1,24 +1,24 @@
 from flask import Flask,jsonify,request,make_response
-from http import HTTPStatus
-from flask_sqlalchemy import SQLAlchemy  #thorugh python change is databse
-from marshmallow import fields,ValidationError #handle ValidationError
-from marshmallow_sqlalchemy import ModelSchema
-from sqlalchemy.types import TypeDecorator
-from sqlalchemy import create_engine
-from sqlalchemy.orm import scoped_session, sessionmaker
-from sqlalchemy.ext.declarative import declarative_base
+from http import HTTPStatus #to display error codes
+from flask_sqlalchemy import SQLAlchemy  #databse used
+from marshmallow import fields,ValidationError #for ValidationError
+from marshmallow_sqlalchemy import ModelSchema #to give schema to database
+from sqlalchemy.types import TypeDecorator #to identify the type of the data
+from sqlalchemy import create_engine #to create databsse
+from sqlalchemy.orm import scoped_session, sessionmaker #to manage the session of databse creation
+from sqlalchemy.ext.declarative import declarative_base #base class
 
 
 
-### ERRORS HANDLING ##
-def page_not_found(e):  # error:URL Not Found
+
+def page_not_found(e):  #when wrong URL passed
     return jsonify({'message': 'URL not found !!'}), HTTPStatus.NOT_FOUND
-def BAD_REQUEST(e): #errpr: check syntax error, Invalid Request message
+def BAD_REQUEST(e): #check syntax error
     return jsonify({'message': 'BAD REQUEST !! Syntax,Invalid Request Message Framing,Or Deceptive Request Routing'}),HTTPStatus.BAD_REQUEST
-def method_not_allowed(e): # error:when you pass wrong url
+def method_not_allowed(e): # when you pass wrong url to a method
     return jsonify({'message': 'Method Not Allowed !!'}), HTTPStatus.METHOD_NOT_ALLOWED
 
-### DATABASE DEFINATION ###
+
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI']="sqlite:///tablet.db"
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS']= False
@@ -33,15 +33,13 @@ Base.query = db_session.query_property()
 def init_db():
     Base.metadata.create_all(bind=engine)
 
-app.register_error_handler(404,page_not_found)
+app.register_error_handler(404,page_not_found) #to register the above defined error functions 
 app.register_error_handler(400,BAD_REQUEST)
 app.register_error_handler(405,method_not_allowed)
 db=SQLAlchemy(app)
 
 
-##### MODELS #####
-
-class tablet(db.Model):
+class tablet(db.Model): #tablet table definition
     tablet_id=db.Column(db.Integer,primary_key=True)
     tablet_name=db.Column(db.String(20),nullable=False)
     tablet_quantity=db.Column(db.Integer,nullable=False)
@@ -63,12 +61,12 @@ class tablet(db.Model):
 
 
 
-### Custom validator ###
-def must_not_be_blank(data):
+
+def must_not_be_blank(data): #validation to check for empty fileds passed
     if not data:
         raise ValidationError("Can't be Empty!") #raise Validation error on empty input data
 
-def null_and_type_check(data, tabletObject): #check for not empty-string data input
+def null_and_type_check(data, tabletObject): #check for data input type for all fields in table ; quantity should be between 5 and 100 ; cost should be above 5
    messageString = []
    emptyVariables = []   
    if data.get('tablet_name'):
@@ -105,17 +103,16 @@ def null_and_type_check(data, tabletObject): #check for not empty-string data in
    else:
       return '' 
         
-### SCHEMAS ###
-class tabletSchema(ModelSchema):
+
+class tabletSchema(ModelSchema): #to get and post the data from table 
       class Meta(ModelSchema.Meta):
            model = tablet
            sqla_session = db.session
       tablet_id = fields.Integer(dump_only=True)
-      tablet_name = fields.String(required=True,validate=must_not_be_blank)  #custom error 
-      tablet_quantity = fields.Integer(required=True,validate=must_not_be_blank)  #custom error
+      tablet_name = fields.String(required=True,validate=must_not_be_blank) 
+      tablet_quantity = fields.Integer(required=True,validate=must_not_be_blank) 
       tablet_cost = fields.Integer(required=True,validate=must_not_be_blank)
 
-##### API #####
 
 # Get All tablets    
 @app.route('/tablets', methods=['GET'])
@@ -143,12 +140,12 @@ def get_tablet_by_id(tablet_id):
 def add_tablet():
    data = request.get_json()
    if not data:
-        return {"message": "No input data provided"},400 #error:data is not in json format
+        return {"message": "No input data provided"},400 
    tablet_schema = tabletSchema()
    try:
       tablets = tablet_schema.load(data)
    except ValidationError as err:
-        return err.messages, 422    #error: invalid datatype of input data
+        return err.messages, 422    
    improper_data = null_and_type_check(data, tablets)
    if improper_data:
       return {"message": improper_data}, 422
@@ -160,11 +157,11 @@ def add_tablet():
 def update_tablets(tablet_id):
       data=request.get_json()
       if not data:
-        return {"message": "No input data provided"} ,400 #error:data is not in json format
+        return {"message": "No input data provided"} ,400 
       get_tablet=tablet.query.get(tablet_id)
       if(get_tablet == None):
          return {"message": "Tablet id doesn't exist, can't update!"}, 404
-      improperData = null_and_type_check(data, get_tablet) #error: check for not empty-string data input
+      improperData = null_and_type_check(data, get_tablet) 
       if improperData:
             return {"message": improperData}, 422
       db.session.add(get_tablet)
@@ -182,8 +179,8 @@ def delete_tablet_by_id(tablet_id):
    if get_tablet:
       db.session.delete(get_tablet)
       db.session.commit()
-      return make_response(jsonify({'message':'Tablet Deleted!'})),HTTPStatus.OK # tablet with tabletid deleted sucessfully
-   return jsonify({'message': 'tablet not found'}), HTTPStatus.NOT_FOUND  #error:if tablet not found in database
+      return make_response(jsonify({'message':'Tablet Deleted!'})),HTTPStatus.OK 
+   return jsonify({'message': 'tablet not found'}), HTTPStatus.NOT_FOUND  
 
 
 
